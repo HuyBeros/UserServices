@@ -328,15 +328,12 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 
 ## Contact
 
-| Thông tin | Chi tiết |
-|---|---|
-| **Tên** | [TODO: Tên của bạn] |
-| **Email** | [TODO: Email] |
-| **GitHub** | [TODO: GitHub profile URL] |
-| **Project Link** | [TODO: GitHub repository URL] |
+| Thông tin | Chi tiết                   |
+|---|----------------------------|
+| **Tên** | Nguyễn Quang Huy    |
+| **Email** |  nquanghuycv@gmail.com
+| **GitHub** | https://github.com/HuyBeros
+| **Project Link** |  https://github.com/HuyBeros/UserServices
 
 ---
 
-<p align="center">
-  Made by <strong>[TODO: Tên nhóm]</strong> — HaUI
-</p>
