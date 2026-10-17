@@ -8,8 +8,6 @@ import com.bookstore.userservices.dto.response.UserDetailResponse;
 import com.bookstore.userservices.entity.RoleName;
 import com.bookstore.userservices.entity.UserStatus;
 import com.bookstore.userservices.service.UserService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -24,7 +22,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/admin/users")
 @RequiredArgsConstructor
-@Tag(name = "3. Admin User Management", description = "Các API quản lý người dùng dành riêng cho ADMIN")
 public class AdminUserController {
 
     private final UserService userService;
@@ -39,7 +36,6 @@ public class AdminUserController {
      * @param status lọc theo trạng thái tài khoản (ACTIVE, LOCKED)
      * @return HTTP 200 OK kèm danh sách người dùng phân trang
      */
-    @Operation(summary = "Lấy danh sách người dùng", description = "Tìm kiếm theo từ khóa, lọc theo vai trò (role) và trạng thái (status), có phân trang")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<UserDetailResponse>>> getAllUsers(
             @RequestParam(defaultValue = "0") int pageNo,
@@ -58,7 +54,6 @@ public class AdminUserController {
      * @param userId mã định danh của người dùng
      * @return HTTP 200 OK kèm thông tin chi tiết người dùng
      */
-    @Operation(summary = "Xem chi tiết người dùng", description = "Lấy thông tin chi tiết của 1 tài khoản bằng userId")
     @GetMapping("/{userId}")
     public ResponseEntity<ApiResponse<UserDetailResponse>> getUserById(@PathVariable Long userId) {
         UserDetailResponse response = userService.getUserById(userId);
@@ -73,7 +68,6 @@ public class AdminUserController {
      * @param request dữ liệu trạng thái mới (ACTIVE hoặc LOCKED)
      * @return HTTP 200 OK kèm thông tin user sau cập nhật
      */
-    @Operation(summary = "Khóa hoặc Mở khóa tài khoản", description = "Đổi trạng thái ACTIVE / LOCKED cho user (Admin không được tự khóa chính mình)")
     @PatchMapping("/{userId}/status")
     public ResponseEntity<ApiResponse<UserDetailResponse>> updateUserStatus(
             @AuthenticationPrincipal UserDetails adminDetails,
@@ -92,7 +86,6 @@ public class AdminUserController {
      * @param request dữ liệu vai trò mới
      * @return HTTP 200 OK kèm thông tin user sau cập nhật
      */
-    @Operation(summary = "Phân quyền vai trò", description = "Gán vai trò ADMIN / STAFF / CUSTOMER cho user (Admin không được tự hạ quyền chính mình)")
     @PatchMapping("/{userId}/role")
     public ResponseEntity<ApiResponse<UserDetailResponse>> updateUserRole(
             @AuthenticationPrincipal UserDetails adminDetails,
