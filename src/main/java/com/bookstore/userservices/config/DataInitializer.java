@@ -26,20 +26,29 @@ public class DataInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${admin.default.username:admin}")
+    @Value("${admin.default.username}")
     private String defaultAdminUsername;
 
-    @Value("${admin.default.password:Admin@123456}")
+    @Value("${admin.default.password}")
     private String defaultAdminPassword;
 
-    @Value("${admin.default.email:admin@bookstore.com}")
+    @Value("${admin.default.email}")
     private String defaultAdminEmail;
 
     /**
      * Phương thức thực thi ngay sau khi Spring ApplicationContext được nạp thành công.
+     * Kiểm tra ADMIN_PASSWORD environment variable trước khi khởi tạo dữ liệu.
+     *
+     * @throws IllegalStateException nếu ADMIN_PASSWORD không được cấu hình
      */
     @Override
     public void run(String... args) {
+        if (defaultAdminPassword == null || defaultAdminPassword.isBlank()) {
+            throw new IllegalStateException(
+                "ADMIN_PASSWORD environment variable is required. " +
+                "Please set ADMIN_PASSWORD in your .env file or environment variables."
+            );
+        }
         initRoles();
         initAdminAccount();
     }

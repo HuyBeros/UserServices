@@ -1,8 +1,11 @@
 package com.bookstore.userservices.service.impl;
 
+import com.bookstore.userservices.dto.request.ForgotPasswordRequest;
 import com.bookstore.userservices.dto.request.LoginRequest;
 import com.bookstore.userservices.dto.request.RefreshTokenRequest;
 import com.bookstore.userservices.dto.request.RegisterRequest;
+import com.bookstore.userservices.dto.request.ResetPasswordRequest;
+import com.bookstore.userservices.dto.request.VerifyOtpRequest;
 import com.bookstore.userservices.dto.response.AuthResponse;
 import com.bookstore.userservices.entity.Role;
 import com.bookstore.userservices.entity.RoleName;
@@ -13,9 +16,13 @@ import com.bookstore.userservices.repository.RoleRepository;
 import com.bookstore.userservices.repository.UserRepository;
 import com.bookstore.userservices.security.JwtService;
 import com.bookstore.userservices.service.AuthService;
+import com.bookstore.userservices.service.EmailService;
+import com.bookstore.userservices.service.OtpService;
 import com.bookstore.userservices.service.RateLimitService;
+import com.bookstore.userservices.service.TokenBlacklistService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +40,9 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final RateLimitService rateLimitService;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final OtpService otpService;
+    private final EmailService emailService;
 
     /**
      * Đăng ký tài khoản khách hàng mới vào hệ thống.
@@ -179,5 +189,77 @@ public class AuthServiceImpl implements AuthService {
                 .fullName(user.getFullName())
                 .role(user.getRole().getRoleName().name())
                 .build();
+    }
+
+    /**
+     * Đăng xuất khỏi hệ thống: tính thời gian sống còn lại và đưa Access Token vào Redis Blacklist.
+     */
+    @Override
+    public void logout(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return;
+        }
+
+        String token = authHeader.substring(7);
+        long remainingExpiration = jwtService.getRemainingExpiration(token);
+        if (remainingExpiration > 0) {
+            tokenBlacklistService.blacklistToken(token, remainingExpiration);
+        }
+
+        SecurityContextHolder.clearContext();
+    }
+
+    /**
+     * Quên mật khẩu: Kiểm tra user tồn tại, tạo mã OTP và gửi email.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public void forgotPassword(ForgotPasswordRequest request) {
+        User user = userRepository.findByEmail(request.getEmail().trim())
+                .orElseThrow(() -> new AppException("Không tìm thấy tài khoản với email: " + request.getEmail(), HttpStatus.NOT_FOUND));
+
+        if (user.getStatus() == UserStatus.LOCKED) {
+            throw new AppException("Tài khoản của bạn đã bị khóa, không thể khôi phục mật khẩu", HttpStatus.FORBIDDEN);
+        }
+
+        String otp = otpService.generateOtp(user.getEmail());
+        emailService.sendOtpEmail(user.getEmail(), otp);
+    }
+
+    /**
+     * Xác thực tính hợp lệ của mã OTP.
+     */
+    @Override
+    public boolean verifyOtp(VerifyOtpRequest request) {
+        boolean isValid = otpService.verifyOtp(request.getEmail(), request.getOtp());
+        if (!isValid) {
+            throw new AppException("Mã OTP không chính xác hoặc đã hết hạn", HttpStatus.BAD_REQUEST);
+        }
+        return true;
+    }
+
+    /**
+     * Đặt lại mật khẩu mới thông qua mã OTP xác thực.
+     */
+    @Override
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        boolean isValid = otpService.verifyOtp(request.getEmail(), request.getOtp());
+        if (!isValid) {
+            throw new AppException("Mã OTP không chính xác hoặc đã hết hạn", HttpStatus.BAD_REQUEST);
+        }
+
+        User user = userRepository.findByEmail(request.getEmail().trim())
+                .orElseThrow(() -> new AppException("Không tìm thấy tài khoản với email: " + request.getEmail(), HttpStatus.NOT_FOUND));
+
+        if (user.getStatus() == UserStatus.LOCKED) {
+            throw new AppException("Tài khoản của bạn đã bị khóa", HttpStatus.FORBIDDEN);
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        // Xóa mã OTP sau khi sử dụng thành công
+        otpService.clearOtp(request.getEmail());
     }
 }

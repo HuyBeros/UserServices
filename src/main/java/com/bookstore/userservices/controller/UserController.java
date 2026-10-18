@@ -5,8 +5,6 @@ import com.bookstore.userservices.dto.request.UpdateProfileRequest;
 import com.bookstore.userservices.dto.response.ApiResponse;
 import com.bookstore.userservices.dto.response.UserDetailResponse;
 import com.bookstore.userservices.service.UserService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +19,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
-@Tag(name = "2. User Profile", description = "Các API thông tin cá nhân của người dùng đang đăng nhập")
 public class UserController {
 
     private final UserService userService;
@@ -32,7 +29,6 @@ public class UserController {
      * @param userDetails thông tin xác thực của user lấy từ SecurityContext
      * @return HTTP 200 OK kèm DTO chi tiết người dùng
      */
-    @Operation(summary = "Lấy thông tin cá nhân", description = "Lấy hồ sơ cá nhân của user đang đăng nhập dựa trên JWT token")
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserDetailResponse>> getMyProfile(@AuthenticationPrincipal UserDetails userDetails) {
         UserDetailResponse response = userService.getProfile(userDetails.getUsername());
@@ -46,7 +42,6 @@ public class UserController {
      * @param request dữ liệu cập nhật (họ tên, email, sđt, địa chỉ)
      * @return HTTP 200 OK kèm DTO người dùng sau khi cập nhật
      */
-    @Operation(summary = "Cập nhật hồ sơ cá nhân", description = "Cập nhật họ tên, email, số điện thoại, địa chỉ của user")
     @PutMapping("/profile")
     public ResponseEntity<ApiResponse<UserDetailResponse>> updateProfile(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -63,7 +58,6 @@ public class UserController {
      * @param request dữ liệu đổi mật khẩu gồm mật khẩu cũ và mới
      * @return HTTP 200 OK xác nhận đổi mật khẩu thành công
      */
-    @Operation(summary = "Đổi mật khẩu", description = "Đổi mật khẩu cá nhân (yêu cầu cung cấp đúng mật khẩu cũ)")
     @PutMapping("/change-password")
     public ResponseEntity<ApiResponse<Void>> changePassword(
             @AuthenticationPrincipal UserDetails userDetails,

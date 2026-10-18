@@ -9,6 +9,12 @@ import com.bookstore.userservices.entity.UserStatus;
 import com.bookstore.userservices.repository.RoleRepository;
 import com.bookstore.userservices.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.bookstore.userservices.dto.request.ForgotPasswordRequest;
+import com.bookstore.userservices.dto.request.ResetPasswordRequest;
+import com.bookstore.userservices.dto.request.VerifyOtpRequest;
+import com.bookstore.userservices.security.JwtService;
+import com.bookstore.userservices.service.OtpService;
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,12 +22,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 
 import static org.hamcrest.Matchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -44,6 +52,12 @@ class AuthIntegrationTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtService jwtService;
+
+    @Autowired
+    private OtpService otpService;
 
     private Role customerRole;
 
@@ -180,5 +194,134 @@ class AuthIntegrationTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.message", containsString("bị khóa")));
+    }
+
+    @Test
+    void testLogoutSuccessAndTokenBlacklist() throws Exception {
+        String username = "logout_test_" + System.currentTimeMillis();
+        String password = "password123";
+
+        userRepository.save(User.builder()
+                .username(username)
+                .password(passwordEncoder.encode(password))
+                .fullName("User Logout Test")
+                .email(username + "@example.com")
+                .role(customerRole)
+                .status(UserStatus.ACTIVE)
+                .build());
+
+        // 1. Đăng nhập để lấy token
+        LoginRequest loginRequest = LoginRequest.builder()
+                .usernameOrEmail(username)
+                .password(password)
+                .build();
+
+        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String responseJson = loginResult.getResponse().getContentAsString();
+        String accessToken = JsonPath.read(responseJson, "$.data.accessToken");
+
+        // 2. Xác nhận có thể truy cập endpoint bảo mật bằng token này
+        mockMvc.perform(get("/api/users/me")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username", is(username)));
+
+        // 3. Thực hiện Đăng xuất (Logout) -> Đưa token vào Blacklist
+        mockMvc.perform(post("/api/auth/logout")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.message", containsString("thành công")));
+
+        // 4. Thử gọi lại endpoint bảo mật với token đã bị Blacklist -> Phải trả về 401 Unauthorized
+        mockMvc.perform(get("/api/users/me")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void testForgotPasswordAndResetPasswordFlow() throws Exception {
+        String username = "otp_test_" + System.currentTimeMillis();
+        String email = username + "@example.com";
+        String oldPassword = "oldPassword123";
+        String newPassword = "newPassword456";
+
+        userRepository.save(User.builder()
+                .username(username)
+                .password(passwordEncoder.encode(oldPassword))
+                .fullName("User OTP Test")
+                .email(email)
+                .role(customerRole)
+                .status(UserStatus.ACTIVE)
+                .build());
+
+        // 1. Quên mật khẩu -> Yêu cầu gửi OTP
+        ForgotPasswordRequest forgotRequest = ForgotPasswordRequest.builder()
+                .email(email)
+                .build();
+
+        mockMvc.perform(post("/api/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(forgotRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        // 2. Thử xác thực OTP sai -> 400 Bad Request
+        VerifyOtpRequest wrongOtpRequest = VerifyOtpRequest.builder()
+                .email(email)
+                .otp("000000")
+                .build();
+
+        mockMvc.perform(post("/api/auth/verify-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(wrongOtpRequest)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)));
+
+        // 3. Lấy mã OTP thực tế đã tạo từ OtpService
+        String validOtp = otpService.generateOtp(email);
+
+        // 4. Xác thực OTP đúng -> 200 OK
+        VerifyOtpRequest correctOtpRequest = VerifyOtpRequest.builder()
+                .email(email)
+                .otp(validOtp)
+                .build();
+
+        mockMvc.perform(post("/api/auth/verify-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(correctOtpRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        // 5. Đặt lại mật khẩu với OTP hợp lệ -> 200 OK
+        ResetPasswordRequest resetRequest = ResetPasswordRequest.builder()
+                .email(email)
+                .otp(validOtp)
+                .newPassword(newPassword)
+                .build();
+
+        mockMvc.perform(post("/api/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(resetRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        // 6. Đăng nhập với mật khẩu mới thành công
+        LoginRequest loginNewRequest = LoginRequest.builder()
+                .usernameOrEmail(username)
+                .password(newPassword)
+                .build();
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginNewRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.username", is(username)));
     }
 }

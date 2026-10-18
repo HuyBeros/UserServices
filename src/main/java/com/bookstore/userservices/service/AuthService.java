@@ -1,13 +1,16 @@
 package com.bookstore.userservices.service;
 
+import com.bookstore.userservices.dto.request.ForgotPasswordRequest;
 import com.bookstore.userservices.dto.request.LoginRequest;
 import com.bookstore.userservices.dto.request.RefreshTokenRequest;
 import com.bookstore.userservices.dto.request.RegisterRequest;
+import com.bookstore.userservices.dto.request.ResetPasswordRequest;
+import com.bookstore.userservices.dto.request.VerifyOtpRequest;
 import com.bookstore.userservices.dto.response.AuthResponse;
 
 /**
  * Giao diện định nghĩa các dịch vụ xác thực tài khoản và quản lý phiên làm việc.
- * Cung cấp chức năng: đăng ký khách hàng, đăng nhập hệ thống và cấp mới token.
+ * Cung cấp chức năng: đăng ký khách hàng, đăng nhập, cấp mới token, đăng xuất và khôi phục mật khẩu qua OTP.
  */
 public interface AuthService {
 
@@ -37,4 +40,33 @@ public interface AuthService {
      * @throws com.bookstore.userservices.exception.AppException nếu token không hợp lệ, hết hạn hoặc tài khoản bị khóa
      */
     AuthResponse refreshToken(RefreshTokenRequest request);
+
+    /**
+     * Đăng xuất khỏi hệ thống và đưa Access Token vào danh sách đen (Blacklist).
+     *
+     * @param authHeader giá trị Header Authorization chứa chuỗi Bearer Token
+     */
+    void logout(String authHeader);
+
+    /**
+     * Gửi yêu cầu khôi phục mật khẩu, tạo mã OTP và gửi về email đã đăng ký.
+     *
+     * @param request đối tượng chứa email người dùng
+     */
+    void forgotPassword(ForgotPasswordRequest request);
+
+    /**
+     * Xác thực tính hợp lệ của mã OTP.
+     *
+     * @param request đối tượng chứa email và mã OTP
+     * @return true nếu mã OTP hợp lệ
+     */
+    boolean verifyOtp(VerifyOtpRequest request);
+
+    /**
+     * Đặt lại mật khẩu mới sau khi xác thực OTP thành công.
+     *
+     * @param request đối tượng chứa email, mã OTP và mật khẩu mới
+     */
+    void resetPassword(ResetPasswordRequest request);
 }

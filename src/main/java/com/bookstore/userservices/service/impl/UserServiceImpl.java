@@ -13,6 +13,8 @@ import com.bookstore.userservices.repository.RoleRepository;
 import com.bookstore.userservices.repository.UserRepository;
 import com.bookstore.userservices.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -48,6 +50,7 @@ public class UserServiceImpl implements UserService {
      */
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "user_profiles", key = "#currentUsername", unless = "#result == null")
     public UserDetailResponse getProfile(String currentUsername) {
         User user = getUserByUsername(currentUsername);
         return UserDetailResponse.fromEntity(user);
@@ -64,6 +67,7 @@ public class UserServiceImpl implements UserService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = "user_profiles", key = "#currentUsername")
     public UserDetailResponse updateProfile(String currentUsername, UpdateProfileRequest request) {
         User user = getUserByUsername(currentUsername);
 
@@ -82,19 +86,29 @@ public class UserServiceImpl implements UserService {
     /**
      * Đổi mật khẩu tài khoản người dùng.
      * Xác thực mật khẩu cũ bằng BCrypt trước khi mã hóa và lưu mật khẩu mới.
+     * 
+     * Business Rules:
+     * - Mật khẩu cũ phải đúng
+     * - Mật khẩu mới không được trùng với mật khẩu cũ
      *
      * @param currentUsername tên đăng nhập của user hiện tại
      * @param request dữ liệu gồm mật khẩu cũ và mật khẩu mới
-     * @throws AppException nếu mật khẩu cũ không chính xác
+     * @throws AppException nếu mật khẩu cũ không chính xác hoặc mật khẩu mới trùng cũ
      */
     @Override
     @Transactional
+    @CacheEvict(value = "user_profiles", key = "#currentUsername")
     public void changePassword(String currentUsername, ChangePasswordRequest request) {
         User user = getUserByUsername(currentUsername);
 
         // Kiểm tra mật khẩu cũ có khớp với mã băm trong CSDL không
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
             throw new AppException("Mật khẩu hiện tại không chính xác", HttpStatus.BAD_REQUEST);
+        }
+
+        // Business Rule: Mật khẩu mới không được trùng với mật khẩu cũ
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            throw new AppException("Mật khẩu mới không được trùng với mật khẩu hiện tại", HttpStatus.BAD_REQUEST);
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
@@ -160,6 +174,7 @@ public class UserServiceImpl implements UserService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = "user_profiles", allEntries = true)
     public UserDetailResponse updateUserStatus(String currentAdminUsername, Long targetUserId, UserStatus newStatus) {
         User targetUser = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new AppException("Không tìm thấy người dùng với ID: " + targetUserId, HttpStatus.NOT_FOUND));
@@ -186,6 +201,7 @@ public class UserServiceImpl implements UserService {
      */
     @Override
     @Transactional
+    @CacheEvict(value = "user_profiles", allEntries = true)
     public UserDetailResponse updateUserRole(String currentAdminUsername, Long targetUserId, RoleName newRole) {
         User targetUser = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new AppException("Không tìm thấy người dùng với ID: " + targetUserId, HttpStatus.NOT_FOUND));

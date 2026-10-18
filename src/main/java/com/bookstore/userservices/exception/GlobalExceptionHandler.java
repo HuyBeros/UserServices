@@ -1,6 +1,7 @@
 package com.bookstore.userservices.exception;
 
 import com.bookstore.userservices.dto.response.ApiResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -17,6 +18,7 @@ import java.util.Map;
  * Lớp xử lý ngoại lệ tập trung trên toàn ứng dụng (Global Exception Handler).
  * Bắt tất cả các loại ngoại lệ phát sinh từ tầng Controller/Service và đóng gói thành cấu trúc ApiResponse đồng nhất.
  */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -78,13 +80,16 @@ public class GlobalExceptionHandler {
 
     /**
      * Bắt tất cả các ngoại lệ không lường trước còn lại của hệ thống (Exception).
+     * Log đầy đủ exception ở server-side nhưng chỉ trả về message chung cho client 
+     * để tránh lộ thông tin nhạy cảm về cấu trúc hệ thống.
      *
      * @param ex ngoại lệ chung
-     * @return phản hồi mã 500 Internal Server Error
+     * @return phản hồi mã 500 Internal Server Error với message chung
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleGenericException(Exception ex) {
+        log.error("Lỗi hệ thống không lường trước", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("Đã xảy ra lỗi hệ thống: " + ex.getMessage()));
+                .body(ApiResponse.error("Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau"));
     }
 }

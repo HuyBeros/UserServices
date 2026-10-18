@@ -5,6 +5,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,27 @@ public class JwtService {
 
     @Value("${application.security.jwt.refresh-expiration}")
     private long refreshExpiration;
+
+    /**
+     * Xác thực độ dài tối thiểu của JWT secret key khi khởi động ứng dụng.
+     * Secret key phải có độ dài tối thiểu 256 bits (32 bytes) sau khi decode Base64 
+     * để đảm bảo độ an toàn với thuật toán HMAC-SHA256.
+     *
+     * @throws IllegalStateException nếu secret key null, rỗng hoặc quá ngắn
+     */
+    @PostConstruct
+    public void validateSecretKey() {
+        if (secretKey == null || secretKey.isEmpty()) {
+            throw new IllegalStateException("JWT_SECRET không được để trống");
+        }
+        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException(
+                "JWT_SECRET phải có độ dài tối thiểu 256 bits (32 bytes) sau khi decode Base64. " +
+                "Hiện tại chỉ có " + (keyBytes.length * 8) + " bits."
+            );
+        }
+    }
 
     /**
      * Trích xuất tên đăng nhập (Subject) từ chuỗi token.
@@ -140,8 +162,18 @@ public class JwtService {
     /**
      * Lấy ngày giờ hết hạn của token.
      */
-    private Date extractExpiration(String token) {
+    public Date extractExpiration(String token) {
         return extractClaim(token, Claims::getExpiration);
+    }
+
+    /**
+     * Tính thời gian còn lại (tính bằng mili-giây) trước khi token hết hạn.
+     * Dùng để thiết lập TTL chính xác khi đưa token vào Redis Blacklist.
+     */
+    public long getRemainingExpiration(String token) {
+        Date expiration = extractExpiration(token);
+        long remaining = expiration.getTime() - System.currentTimeMillis();
+        return Math.max(0, remaining);
     }
 
     /**

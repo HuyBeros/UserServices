@@ -28,6 +28,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final CustomUserDetailsService userDetailsService;
+    private final com.bookstore.userservices.service.TokenBlacklistService tokenBlacklistService;
 
     /**
      * Thực thi lọc request đến: kiểm tra Header Authorization, xác thực token và thiết lập SecurityContext.
@@ -48,6 +49,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         final String jwt = authHeader.substring(BEARER_PREFIX.length());
+
+        // Kiểm tra nếu token đã bị thu hồi/đăng xuất (nằm trong Redis Blacklist)
+        if (tokenBlacklistService.isBlacklisted(jwt)) {
+            logger.warn("Token đã nằm trong danh sách đen (Blacklisted)");
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         try {
             final String username = jwtService.extractUsername(jwt);
@@ -70,7 +78,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.setContext(context);
                 }
             }
-        } catch (Exception e) {
+        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
             // Token không hợp lệ hoặc hết hạn -> ghi log cảnh báo và tiếp tục chuỗi lọc mà không cấp quyền
             logger.warn("Không thể xác thực JWT Token: " + e.getMessage());
         }

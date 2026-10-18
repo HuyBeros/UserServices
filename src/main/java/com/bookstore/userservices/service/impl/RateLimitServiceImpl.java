@@ -23,12 +23,19 @@ public class RateLimitServiceImpl implements RateLimitService {
 
     /**
      * Kiểm tra và tiêu thụ 1 token đăng nhập cho tài khoản.
+     * 
+     * Business Rule: Mỗi username/email chỉ được thử đăng nhập tối đa N lần trong M phút
      *
      * @param identifier định danh người dùng (username hoặc email)
-     * @return true nếu còn lượt đăng nhập, false nếu đã dùng hết hạn mức
+     * @return true nếu còn lượt đăng nhập, false nếu đã dùng hết hạn mức hoặc identifier không hợp lệ
      */
     @Override
     public boolean tryConsumeLogin(String identifier) {
+        // Business Rule: Identifier không được null hoặc rỗng
+        if (identifier == null || identifier.isEmpty()) {
+            return false;
+        }
+        
         Bucket bucket = rateLimitBuckets.computeIfAbsent(
                 LOGIN_BUCKET_PREFIX + identifier,
                 k -> rateLimitConfig.createLoginBucket()

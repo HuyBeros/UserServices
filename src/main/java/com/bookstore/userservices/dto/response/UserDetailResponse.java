@@ -3,6 +3,7 @@ package com.bookstore.userservices.dto.response;
 import com.bookstore.userservices.entity.User;
 import lombok.*;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -14,7 +15,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class UserDetailResponse {
+public class UserDetailResponse implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private Long userId;
     private String username;
